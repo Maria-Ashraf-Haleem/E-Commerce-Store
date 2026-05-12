@@ -9,27 +9,41 @@ const PurchaseSuccessPage = () => {
 	const [isProcessing, setIsProcessing] = useState(true);
 	const { clearCart } = useCartStore();
 	const [error, setError] = useState(null);
+	const [orderId, setOrderId] = useState(null);
 
 	useEffect(() => {
 		const handleCheckoutSuccess = async (sessionId) => {
 			try {
-				await axios.post("/payments/checkout-success", {
+				const res = await axios.post("/payments/checkout-success", {
 					sessionId,
 				});
 				clearCart();
+				setOrderId(res.data.orderId);
 			} catch (error) {
 				console.log(error);
+				setError("Error processing checkout");
 			} finally {
 				setIsProcessing(false);
 			}
 		};
 
-		const sessionId = new URLSearchParams(window.location.search).get("session_id");
+		const params = new URLSearchParams(window.location.search);
+		const sessionId = params.get("session_id");
+		const mock = params.get("mock");
+		const mockOrderId = params.get("orderId");
+
+		if (mock === "true") {
+			clearCart();
+			setOrderId(mockOrderId);
+			setIsProcessing(false);
+			return;
+		}
+
 		if (sessionId) {
 			handleCheckoutSuccess(sessionId);
 		} else {
 			setIsProcessing(false);
-			setError("No session ID found in the URL");
+			setError("No checkout data found in the URL");
 		}
 	}, [clearCart]);
 
@@ -53,6 +67,7 @@ const PurchaseSuccessPage = () => {
 					<div className='flex justify-center'>
 						<CheckCircle className='text-emerald-400 w-16 h-16 mb-4' />
 					</div>
+
 					<h1 className='text-2xl sm:text-3xl font-bold text-center text-emerald-400 mb-2'>
 						Purchase Successful!
 					</h1>
@@ -60,13 +75,17 @@ const PurchaseSuccessPage = () => {
 					<p className='text-gray-300 text-center mb-2'>
 						Thank you for your order. {"We're"} processing it now.
 					</p>
+
 					<p className='text-emerald-400 text-center text-sm mb-6'>
-						Check your email for order details and updates.
+						This is a demo checkout, no real payment was made.
 					</p>
+
 					<div className='bg-gray-700 rounded-lg p-4 mb-6'>
 						<div className='flex items-center justify-between mb-2'>
 							<span className='text-sm text-gray-400'>Order number</span>
-							<span className='text-sm font-semibold text-emerald-400'>#12345</span>
+							<span className='text-sm font-semibold text-emerald-400'>
+								#{orderId ? orderId.slice(-6).toUpperCase() : "DEMO"}
+							</span>
 						</div>
 						<div className='flex items-center justify-between'>
 							<span className='text-sm text-gray-400'>Estimated delivery</span>
@@ -82,6 +101,7 @@ const PurchaseSuccessPage = () => {
 							<HandHeart className='mr-2' size={18} />
 							Thanks for trusting us!
 						</button>
+
 						<Link
 							to={"/"}
 							className='w-full bg-gray-700 hover:bg-gray-600 text-emerald-400 font-bold py-2 px-4 
@@ -96,4 +116,5 @@ const PurchaseSuccessPage = () => {
 		</div>
 	);
 };
+
 export default PurchaseSuccessPage;

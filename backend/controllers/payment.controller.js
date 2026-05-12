@@ -118,6 +118,87 @@ export const checkoutSuccess = async (req, res) => {
 	}
 };
 
+export const mockCheckout = async (req, res) => {
+	try {
+		const { products, couponCode } = req.body;
+
+		if (!Array.isArray(products) || products.length === 0) {
+			return res.status(400).json({ message: "Invalid or empty products array" });
+		}
+
+		let totalAmount = 0;
+
+		const orderProducts = products.map((product) => {
+			if (!product._id || !product.price) {
+				throw new Error("Invalid product data");
+			}
+
+			const quantity = product.quantity || 1;
+			const price = product.price;
+
+			totalAmount += price * quantity;
+
+			return {
+				product: product._id,
+				quantity,
+				price,
+			};
+		});
+
+		let coupon = null;
+
+		if (couponCode) {
+			coupon = await Coupon.findOne({
+				code: couponCode,
+				userId: req.user._id,
+				isActive: true,
+			});
+
+			if (coupon) {
+				if (coupon.expirationDate < new Date()) {
+					coupon.isActive = false;
+					await coupon.save();
+
+					return res.status(400).json({ message: "Coupon expired" });
+				}
+
+				totalAmount -= (totalAmount * coupon.discountPercentage) / 100;
+				coupon.isActive = false;
+				await coupon.save();
+			}
+		}
+
+		const newOrder = new Order({
+			user: req.user._id,
+			products: orderProducts,
+			totalAmount,
+			stripeSessionId: `mock_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`,
+		});
+
+		await newOrder.save();
+
+		req.user.cartItems = [];
+		await req.user.save();
+
+		if (totalAmount >= 200) {
+			await createNewCoupon(req.user._id);
+		}
+
+		res.status(200).json({
+			success: true,
+			message: "Mock payment successful, order created successfully.",
+			orderId: newOrder._id,
+			totalAmount,
+		});
+	} catch (error) {
+		console.error("Error processing mock checkout:", error);
+		res.status(500).json({
+			message: "Error processing mock checkout",
+			error: error.message,
+		});
+	}
+};
+
 async function createStripeCoupon(discountPercentage) {
 	const coupon = await stripe.coupons.create({
 		percent_off: discountPercentage,

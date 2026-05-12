@@ -1,16 +1,13 @@
 import { motion } from "framer-motion";
 import { useCartStore } from "../stores/useCartStore";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { MoveRight } from "lucide-react";
-import { loadStripe } from "@stripe/stripe-js";
 import axios from "../lib/axios";
-
-const stripePromise = loadStripe(
-	"pk_test_51KZYccCoOZF2UhtOwdXQl3vcizup20zqKqT9hVUIsVzsdBrhqbUI2fE0ZdEVLdZfeHjeyFXtqaNsyCJCmZWnjNZa00PzMAjlcL"
-);
+import toast from "react-hot-toast";
 
 const OrderSummary = () => {
-	const { total, subtotal, coupon, isCouponApplied, cart } = useCartStore();
+	const { total, subtotal, coupon, isCouponApplied, cart, clearCart } = useCartStore();
+	const navigate = useNavigate();
 
 	const savings = subtotal - total;
 	const formattedSubtotal = subtotal.toFixed(2);
@@ -18,19 +15,30 @@ const OrderSummary = () => {
 	const formattedSavings = savings.toFixed(2);
 
 	const handlePayment = async () => {
-		const stripe = await stripePromise;
-		const res = await axios.post("/payments/create-checkout-session", {
-			products: cart,
-			couponCode: coupon ? coupon.code : null,
-		});
+		try {
+			if (!cart || cart.length === 0) {
+				toast.error("Your cart is empty");
+				return;
+			}
 
-		const session = res.data;
-		const result = await stripe.redirectToCheckout({
-			sessionId: session.id,
-		});
+			const res = await axios.post("/payments/mock-checkout", {
+				products: cart,
+				couponCode: coupon && isCouponApplied ? coupon.code : null,
+			});
 
-		if (result.error) {
-			console.error("Error:", result.error);
+			clearCart();
+
+			navigate(`/purchase-success?mock=true&orderId=${res.data.orderId}`);
+		} catch (error) {
+			console.error("Mock checkout error:", error);
+			console.log("FULL CHECKOUT ERROR:", error.response?.data || error.message);
+
+toast.error(
+	error.response?.data?.error ||
+	error.response?.data?.message ||
+	"Checkout failed"
+);
+			navigate("/purchase-cancel");
 		}
 	};
 
@@ -63,6 +71,7 @@ const OrderSummary = () => {
 							<dd className='text-base font-medium text-emerald-400'>-{coupon.discountPercentage}%</dd>
 						</dl>
 					)}
+
 					<dl className='flex items-center justify-between gap-4 border-t border-gray-600 pt-2'>
 						<dt className='text-base font-bold text-white'>Total</dt>
 						<dd className='text-base font-bold text-emerald-400'>${formattedTotal}</dd>
@@ -75,7 +84,7 @@ const OrderSummary = () => {
 					whileTap={{ scale: 0.95 }}
 					onClick={handlePayment}
 				>
-					Proceed to Checkout
+					Place Order
 				</motion.button>
 
 				<div className='flex items-center justify-center gap-2'>
@@ -92,4 +101,5 @@ const OrderSummary = () => {
 		</motion.div>
 	);
 };
+
 export default OrderSummary;
